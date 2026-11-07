@@ -1,0 +1,5 @@
+{
+  "global": {
+    "cmd-shift-m": { "command": "pane.split", "args": { "direction": "right", "mod": "markdown-viewer" } }
+  }
+}
