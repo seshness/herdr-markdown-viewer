@@ -48,7 +48,7 @@ export default class MarkdownViewer extends View {
     this.file = file;
     this.on = on ?? null;
     this.error = null;
-    this.code = null;
+    this.code?.release(); this.code = null;
     const mine = ++this.version;
     this.load(cx);
     this.polling = Boolean(this.on);
@@ -65,6 +65,8 @@ export default class MarkdownViewer extends View {
     });
   }
 
+  async close() { this.code?.release(); }
+
   load(cx) {
     const mine = this.version, file = this.file, on = this.on;
     this.reading = true;
@@ -77,7 +79,8 @@ export default class MarkdownViewer extends View {
         else if (text !== this.text) {
           this.error = null;
           this.text = text;
-          this.code = null; // the Source view is rebuilt from the new text
+          this.code?.release(); this.code = null;
+          if (this.source) this.buildSource(); // the Source view follows the new text
         }
       } catch (e) {
         if (this.version === mine) this.error = "Cannot read this file (too large or unreadable)";
@@ -109,17 +112,21 @@ export default class MarkdownViewer extends View {
   }
 
   // The Source view: a read-only editor with Markdown highlighting.
-  sourceView() {
-    if (!this.code) {
-      const t = theme();
-      this.code = EditorState.new({
+  // EditorState.new can't run while rendering: build it when the text arrives and when Source is clicked.
+  buildSource() {
+    if (this.text === null) return;
+    const t = theme();
+    this.code?.release();
+    this.code = EditorState.new({
         language: "markdown", readonly: true,
         value: this.text.length > MAX ? this.text.slice(0, MAX) + "\n… (truncated)" : this.text,
         font_family: settings().font_family, font_size: 12,
         syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 },
-      });
-    }
-    return Editor.new(this.code).flex_1().min_h(0);
+    });
+  }
+
+  sourceView(t) {
+    return this.code ? Editor.new(this.code).flex_1().min_h(0) : div().p(16).text_size(12.5).text_color(t.dim).child("Loading…");
   }
 
   button(id, label, active, onClick) {
@@ -137,7 +144,7 @@ export default class MarkdownViewer extends View {
       : this.text === null
         ? div().p(16).text_size(12.5).text_color(t.dim).child("Loading…")
         : this.source
-          ? this.sourceView()
+          ? this.sourceView(t)
           : div().flex_1().min_h(0).px(20).py(14).text_size(14)
             .child(TextView.markdown(`mv-${this.version}`, prose(this.text.length > MAX ? this.text.slice(0, MAX) : this.text, this.file)).scrollable(true).selectable(true).size_full());
     return v_flex().size_full().min_h(0)
@@ -146,7 +153,7 @@ export default class MarkdownViewer extends View {
         .child(div().font_semibold().truncate().child(name))
         .child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(this.on ? `${this.on}:${this.file}` : this.file))
         .child(this.button("mv-rendered", "Rendered", !this.source, (_e, cx) => { this.source = false; cx.notify(); }))
-        .child(this.button("mv-source", "Source", this.source, (_e, cx) => { this.source = true; cx.notify(); }))
+        .child(this.button("mv-source", "Source", this.source, (_e, cx) => { this.source = true; if (!this.code) this.buildSource(); cx.notify(); }))
         .child(this.button("mv-reload", "↻", false, (_e, cx) => this.load(cx))))
       .child(body);
   }
