@@ -1,0 +1,23 @@
+#!/bin/sh
+# mdv [file.md]: show a Markdown file in a pane beside the focused one, in the Herdr window
+# this shell runs in. Without a file, opens the picker for the folder you are in.
+set -eu
+
+if [ "$#" -eq 0 ]; then
+  exec herdr-app do pane.split --direction right --mod markdown-viewer
+fi
+if [ "$#" -ne 1 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  echo "usage: mdv [file.md]" >&2
+  exit 2
+fi
+
+file=$1
+[ -f "$file" ] || { echo "mdv: $file: not a file" >&2; exit 1; }
+dir=$(cd "$(dirname -- "$file")" && pwd -P)
+abs="$dir/$(basename -- "$file")"
+
+# JSON string: escape backslashes and quotes; refuse control characters.
+case $abs in *[![:print:]]*) echo "mdv: unsupported characters in path" >&2; exit 1 ;; esac
+esc=$(printf '%s' "$abs" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+exec herdr-app do pane.split --direction right --mod markdown-viewer --props "{\"file\":\"$esc\"}"
